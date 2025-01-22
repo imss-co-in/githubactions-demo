@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Frontend CI/CD Pipeline
 
 on:
   push:
@@ -7,19 +7,21 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
@@ -27,5 +29,35 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Deploy (Optional)
-        run: echo "Deploying to production..."
+      - name: Build application
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: build/
+  
+  deploy:
+    runs-on: self-hosted  # Using IIS server or self-hosted GitHub runner
+    needs: build
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: C:\inetpub\wwwroot\frontend-app  # Adjust to IIS web directory
+
+      - name: Deploy to IIS
+        shell: powershell
+        run: |
+          Write-Output "Stopping IIS service..."
+          Stop-Service -Name 'w3svc'
+          Write-Output "Copying new build files..."
+          Copy-Item -Path "C:\inetpub\wwwroot\frontend-app\*" -Destination "C:\inetpub\wwwroot\react-app" -Recurse -Force
+          Write-Output "Starting IIS service..."
+          Start-Service -Name 'w3svc'
+
+      - name: Confirm Deployment
+        run: echo "Deployment to IIS completed successfully."
